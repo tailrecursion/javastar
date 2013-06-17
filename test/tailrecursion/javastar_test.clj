@@ -21,7 +21,7 @@
 
   (is (= "holy cow!" (java* [clojure.lang.Var clojure.lang.RT]
                             String [String String]
-                            "clojure.lang.Var str = clojure.lang.RT.var(\"clojure.core\",\"str\");
+                            "Var str = RT.var(\"clojure.core\",\"str\");
                              return (String) str.invoke(~{},\" \", ~{}, \"!\");"
                             "holy"
                             "cow"))))
