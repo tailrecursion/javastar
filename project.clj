@@ -1,4 +1,4 @@
-(defproject tailrecursion/javastar "1.0.1"
+(defproject tailrecursion/javastar "1.0.2"
   :description "Write Java inside Clojure"
   :url "https://github.com/tailrecursion/javastar"
   :license {:name "Eclipse Public License"

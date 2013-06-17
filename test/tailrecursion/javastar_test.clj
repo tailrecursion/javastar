@@ -4,7 +4,7 @@
 
 (deftest aliases
   (let [arr (double-array 100 1.0)
-        sum #(java* double [doubles]
+        sum #(java* [] double [doubles]
                     "double s = 0;
                      double[] arr = ~{};
                      for(int i = 0; i < arr.length; i++) {
@@ -16,5 +16,12 @@
       (is (= (class answer) Double)))))
 
 (deftest n-args
-  (let [greet #(java* java.lang.String [String String] "return ~{} +\", \" + ~{} + \"!\"; " %1 %2)]
-    (= "hi, Bob!" (greet "hi" "Bob"))))
+  (let [greet #(java* [] java.lang.String [String String] "return ~{} +\", \" + ~{} + \"!\"; " %1 %2)]
+    (= "hi, Bob!" (greet "hi" "Bob")))
+
+  (is (= "holy cow!" (java* [clojure.lang.Var clojure.lang.RT]
+                            String [String String]
+                            "clojure.lang.Var str = clojure.lang.RT.var(\"clojure.core\",\"str\");
+                             return (String) str.invoke(~{},\" \", ~{}, \"!\");"
+                            "holy"
+                            "cow"))))

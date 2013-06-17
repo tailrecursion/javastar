@@ -68,7 +68,7 @@
   return-type, arg-types, and ~{} occurrences in source as with js*.
 
   Returns the loaded class's name as a symbol."
-  [return-type arg-types code]
+  [imports return-type arg-types code]
   (let [class-name (str (gensym "tailrecursion_java_STAR_class"))
         n (occurrences code "~{}")
         arg-names (mapv str (repeatedly n gensym))
@@ -76,14 +76,18 @@
                        (interpose \,)
                        (apply str))
         method-body (substitute code "~\\{\\}" arg-names)
+        prelude (apply str (map #(format "import %s;" (name %)) imports))
         class-body (interpolating
-                    "public class #{class-name} {
+                    "#{prelude}
+                     public class #{class-name} {
                        public static #{return-type} m (#{arguments}) {
                          #{method-body}
                        }
                      }")]
-    (compile-java class-name class-body)
-    (symbol class-name)))
+;    (println class-body)
+   (compile-java class-name class-body)
+   (symbol class-name)
+    ))
 
 (def prim-aliases
   "Type aliases for use with the return-type and arg-types arguments
@@ -118,14 +122,15 @@
   "Similar to ClojureScript's js*.  Compiles a Java code string into a
   Java method and invokes the method with args.
 
-  Unlike js*, java* requires type information.  return-type and
-  arg-types may be either Java classes or symbol aliases for primitive
-  types and arrays.  See prim-aliases for available aliases.
+  java* has more arguments than js*.  imports is a vector of
+  zero or more fully qualified class names.  return-type and arg-types
+  may be either Java classes or symbol aliases for primitive types and
+  arrays.  See prim-aliases for available aliases.
 
   Example:
 
-  (def java-add #(java* long [long long] \"return ~{} + ~{};\" %1 %2))
+  (def java-add #(java* [] long [long long] \"return ~{} + ~{};\" %1 %2))
   (java-add 1 2) ;=> 3"
-  [return-type arg-types code & args]
-  (let [g (generate-class (unalias return-type) (map unalias arg-types) code)]
+  [imports return-type arg-types code & args]
+  (let [g (generate-class imports (unalias return-type) (map unalias arg-types) code)]
     `(. ~g ~'m ~@args)))
