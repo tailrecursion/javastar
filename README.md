@@ -3,7 +3,7 @@
 Write Java inside Clojure:
 
 ```clojure
-(require '[tailrecursion.javastar :refer java*])
+(require '[tailrecursion.javastar :refer [java*]])
 
 (defn sum-doubles [arr]
   (java* double [doubles]
@@ -26,8 +26,9 @@ Write Java inside Clojure:
   (java* long [long long] "return ~{} + ~{};" x y))
 
 (add2 1 2) ;=> 3
-
 ```
+
+Requires Java 1.6 JDK or higher.
 
 ## Dependency [![Build Status](https://travis-ci.org/tailrecursion/javastar.png?branch=master)](https://travis-ci.org/tailrecursion/javastar)
 
