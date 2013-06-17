@@ -1,7 +1,6 @@
 (ns tailrecursion.javastar
-  (:require [clojure.repl :refer :all]
-            [clojure.pprint :refer [pprint]]
-            [alandipert.interpol8 :refer [interpolating]])
+  (:require
+   [alandipert.interpol8 :refer [interpolating]])
   (:import
    [javax.tools JavaCompiler SimpleJavaFileObject ToolProvider JavaFileObject$Kind]))
 
@@ -104,7 +103,7 @@
 
 (defmacro java*
   "Similar to ClojureScript's js*.  Compiles a Java code block with
-  spliced args.  
+  spliced args.
 
   Unlike js*, java* requires type information.  return-type and
   arg-types may be either Java classes or symbol aliases for primitive
@@ -117,4 +116,3 @@
   [return-type arg-types code & args]
   (let [g (generate-class (unalias return-type) (map unalias arg-types) code)]
     `(. ~g ~'m ~@args)))
-
