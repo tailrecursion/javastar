@@ -6,7 +6,7 @@ Write Java inside Clojure:
 (require '[tailrecursion.javastar :refer [java*]])
 
 (defn sum-doubles [arr]
-  (java* double [doubles]
+  (java* [] double [doubles]
     "double s = 0;
      double[] arr = ~{};
      for(int i = 0; i < arr.length; i++) {
@@ -18,14 +18,21 @@ Write Java inside Clojure:
 (sum-doubles (double-array 10 1.0)) ;=> 10.0
 
 (defn hi-from-java [name]
-  (java* String [String] "return \"hi \" + ~{} + \"!\";" name))
+  (java* [] String [String] "return \"hi \" + ~{} + \"!\";" name))
 
 (hi-from-java "Bob") ;=> "hi Bob!"
 
 (defn add2 [x y]
-  (java* long [long long] "return ~{} + ~{};" x y))
+  (java* [] long [long long] "return ~{} + ~{};" x y))
 
 (add2 1 2) ;=> 3
+
+(java* [clojure.lang.Var clojure.lang.RT]
+       String [String String]
+       "clojure.lang.Var str = clojure.lang.RT.var(\"clojure.core\",\"str\");
+        return (String) str.invoke(~{},\" \", ~{}, \"!\");"
+       "holy"
+       "cow") ;=> "holy cow!"
 ```
 
 Requires Java 1.6 JDK or higher.
