@@ -84,10 +84,8 @@
                          #{method-body}
                        }
                      }")]
-;    (println class-body)
    (compile-java class-name class-body)
-   (symbol class-name)
-    ))
+   (symbol class-name)))
 
 (def prim-aliases
   "Type aliases for use with the return-type and arg-types arguments
