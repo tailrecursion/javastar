@@ -28,9 +28,9 @@ Write Java inside Clojure:
 (add2 1 2) ;=> 3
 
 (java* [clojure.lang.Var clojure.lang.RT]
-       String [String String]
+       Object [String String]
        "Var str = RT.var(\"clojure.core\",\"str\");
-        return (String) str.invoke(~{},\" \", ~{}, \"!\");"
+        return str.invoke(~{},\" \", ~{}, \"!\");"
        "holy"
        "cow") ;=> "holy cow!"
 ```

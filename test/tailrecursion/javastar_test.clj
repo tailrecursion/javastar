@@ -20,8 +20,8 @@
     (= "hi, Bob!" (greet "hi" "Bob")))
 
   (is (= "holy cow!" (java* [clojure.lang.Var clojure.lang.RT]
-                            String [String String]
+                            Object [String String]
                             "Var str = RT.var(\"clojure.core\",\"str\");
-                             return (String) str.invoke(~{},\" \", ~{}, \"!\");"
+                             return str.invoke(~{},\" \", ~{}, \"!\");"
                             "holy"
                             "cow"))))
