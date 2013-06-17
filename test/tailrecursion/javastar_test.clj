@@ -1,6 +1,7 @@
 (ns tailrecursion.javastar-test
   (:require [clojure.test :refer :all]
-            [tailrecursion.javastar :refer :all]))
+            [tailrecursion.javastar :refer :all])
+  (:import clojure.lang.Var))
 
 (deftest aliases
   (let [arr (double-array 100 1.0)
@@ -19,7 +20,7 @@
   (let [greet #(java* [] java.lang.String [String String] "return ~{} +\", \" + ~{} + \"!\"; " %1 %2)]
     (= "hi, Bob!" (greet "hi" "Bob")))
 
-  (is (= "holy cow!" (java* [clojure.lang.Var clojure.lang.RT]
+  (is (= "holy cow!" (java* [Var clojure.lang.RT]
                             Object [String String]
                             "Var str = RT.var(\"clojure.core\",\"str\");
                              return str.invoke(~{},\" \", ~{}, \"!\");"
