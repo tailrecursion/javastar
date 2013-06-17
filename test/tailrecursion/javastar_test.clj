@@ -16,5 +16,5 @@
       (is (= (class answer) Double)))))
 
 (deftest n-args
-  (let [greet #(java* String [String String] "return ~{} +\", \" + ~{} + \"!\"; " %1 %2)]
+  (let [greet #(java* java.lang.String [String String] "return ~{} +\", \" + ~{} + \"!\"; " %1 %2)]
     (= "hi, Bob!" (greet "hi" "Bob"))))
