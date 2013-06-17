@@ -2,7 +2,7 @@
   (:require
    [alandipert.interpol8 :refer [interpolating]])
   (:import
-   [javax.tools JavaCompiler SimpleJavaFileObject ToolProvider JavaFileObject$Kind]))
+   [javax.tools JavaCompiler DiagnosticCollector SimpleJavaFileObject ToolProvider JavaFileObject$Kind]))
 
 (defn source-object
   "Returns a JavaFileObject to store a class file's source."
@@ -41,11 +41,14 @@
   returning the loaded Class."
   [class-name source]
   (let [compiler (ToolProvider/getSystemJavaCompiler)
+        diag (DiagnosticCollector.)
         mgr (class-manager (.getStandardFileManager compiler nil nil nil))
-        task (.getTask compiler nil mgr nil nil nil [(source-object class-name source)])]
+        task (.getTask compiler nil mgr diag nil nil [(source-object class-name source)])]
     (if (.call task)
       (.loadClass (.getClassLoader mgr nil) class-name)
-      (throw (RuntimeException. "Error compiling inline Java.")))))
+      (throw (RuntimeException.
+              (str "java* compilation error: " (first (.getDiagnostics diag)) "\n"
+                   "source of generated class: \n" source "\n"))))))
 
 (defn occurrences
   "Count of the occurrences of substring in s."
@@ -108,12 +111,17 @@
     longs    "long []"
     shorts   "short []"})
 
+(defn resolve-class
+  "If sym is an imported class, returns a qualified symbol."
+  [sym]
+  (if-let [k (get (ns-imports *ns*) sym)] (.getName k)))
+
 (defn unalias
   "Attempts to resolve sym as a primitive alias or imported Java
   class."
   [sym]
   (or (get prim-aliases sym)
-      (if-let [k (get (ns-imports *ns*) sym)] (.getName k))
+      (resolve-class sym)
       sym))
 
 (defmacro java*
@@ -130,5 +138,50 @@
   (def java-add #(java* [] long [long long] \"return ~{} + ~{};\" %1 %2))
   (java-add 1 2) ;=> 3"
   [imports return-type arg-types code & args]
-  (let [g (generate-class imports (unalias return-type) (map unalias arg-types) code)]
+  {:pre [(= (count arg-types) (count args))]}
+  (let [g (generate-class
+           (map #(or (resolve-class %) %) imports)
+           (unalias return-type)
+           (map unalias arg-types) code)]
     `(. ~g ~'m ~@args)))
+
+(comment
+
+  (def arr (double-array 1000000 1.0))
+
+  (defn sum1 [a] (reduce + a))
+
+  (dotimes [_ 3] (time (sum1 arr)))
+  ;; "Elapsed time: 147.512201 msecs"
+  ;; "Elapsed time: 143.983773 msecs"
+  ;; "Elapsed time: 144.517018 msecs"
+
+  (defn sum2 [^doubles a]
+    (let [len (long (alength a))]
+      (loop [sum 0.0
+             idx 0]
+        (if (< idx len)
+          (let [ai (aget a idx)]
+            (recur (+ sum ai) (unchecked-inc idx)))
+          sum))))
+
+  (dotimes [_ 3] (time (sum2 arr)))
+  ;; "Elapsed time: 48.073676 msecs"
+  ;; "Elapsed time: 42.163496 msecs"
+  ;; "Elapsed time: 42.356943 msecs"
+
+  (defn sum3 [a]
+    (java* [] double [doubles]
+           "double s = 0;
+            double[] arr = ~{};
+            for(int i = 0; i < arr.length; i++) {
+              s += arr[i];
+            }
+            return s;" a))
+
+  (dotimes [_ 3] (time (sum3 arr)))
+  ;; "Elapsed time: 1.672226 msecs"
+  ;; "Elapsed time: 1.117232 msecs"
+  ;; "Elapsed time: 1.312508 msecs"
+
+  )
