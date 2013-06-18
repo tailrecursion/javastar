@@ -138,9 +138,14 @@
     longs    (Class/forName "[J")
     shorts   (Class/forName "[S")})
 
-(def method-cache (atom (cache/lu-cache-factory {} :threshold 1024)))
+(def method-cache
+  "Cache of method signatures to Methods.  Used when java* is AOT'd."
+  (atom (cache/lu-cache-factory {} :threshold 1024)))
 
 (defn ^java.lang.reflect.Method generate-method
+  "Generates a method satisfying arguments, returning a matching
+  method if one has already been generated.  Used only when java* is
+  AOT compiled."
   [imports return-type arg-strs arg-classes code]
   (let [k [return-type arg-classes code]]
     (if-let [meth (get @method-cache k)]
@@ -148,6 +153,14 @@
       (let [klass (generate-class imports return-type arg-strs code)
             meth (.getMethod klass "m" (into-array Class arg-classes))]
         (do (swap! method-cache cache/miss k meth) meth)))))
+
+(defn resolve-class
+  "Attempts to resolve sym as an import alias in the current
+  namespace, returning its name."
+  [sym]
+  (if-let [k (get (ns-imports *ns*) sym)]
+    (.getName ^Class k)
+    (str sym)))
 
 (defmacro java*
   "Similar to ClojureScript's js*.  Compiles a Java code string into a
@@ -161,16 +174,27 @@
   Example:
 
   (def java-add #(java* [] long [long long] \"return ~{} + ~{};\" %1 %2))
-  (java-add 1 2) ;=> 3"
+  (java-add 1 2) ;=> 3
+
+  Note: the implementation of java* is different when the namespace
+  it's being used in is AOT compiled.  The AOT version of java* is
+  slightly slower."
   [imports return-type arg-types code & args]
   {:pre [(= (count arg-types) (count args))]}
-  `(let [meth# (generate-method
-                (mapv #(.getName ^Class %) ~imports)
-                ~(or (prim-strings return-type) `(.getName ^Class ~return-type))
-                ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
-                ~(mapv #(or (prim-classes %) %) arg-types)
-                ~code)]
-     (.invoke meth# nil (into-array Object [~@args]))))
+  (if clojure.core/*compile-files*
+    `(let [meth# (generate-method
+                  (mapv #(.getName ^Class %) ~imports)
+                  ~(or (prim-strings return-type) `(.getName ^Class ~return-type))
+                  ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
+                  ~(mapv #(or (prim-classes %) %) arg-types)
+                  ~code)]
+       (.invoke meth# nil (into-array Object [~@args])))
+    (let [klass (generate-class
+                 (mapv resolve-class imports)
+                 (or (prim-strings return-type) (resolve-class return-type))
+                 (mapv #(or (prim-strings %) (resolve-class %)) arg-types)
+                 code)]
+      `(. ~(symbol (.getName klass)) ~'m ~@args))))
 
 (comment
 
