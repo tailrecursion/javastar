@@ -134,7 +134,7 @@
 
 (defn maybegen-and-invoke
   [imports return-type arg-strs arg-classes code args]
-  (let [k [imports return-type arg-classes code]]
+  (let [k [return-type arg-classes code]]
     (if-let [cached (get @method-cache k)]
       (do (swap! method-cache cache/hit k)
           (.invoke ^java.lang.reflect.Method cached nil (into-array Object args)))
