@@ -35,14 +35,12 @@ Write Java inside Clojure:
        "cow") ;=> "holy cow!"
 ```
 
-Requires Java 1.6 JDK or higher.  Probably not compatible with <a
-href="http://clojure.org/compilation">ahead-of-time (AOT)
-compilation</a>.
+Requires Java 1.6 JDK or higher.
 
 ## Dependency [![Build Status](https://travis-ci.org/tailrecursion/javastar.png?branch=master)](https://travis-ci.org/tailrecursion/javastar)
 
 ```clojure
-[tailrecursion/javastar "1.0.3"]
+[tailrecursion/javastar "1.1.0"]
 ```
 
 ## License

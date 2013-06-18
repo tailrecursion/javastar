@@ -1,6 +1,7 @@
 (ns tailrecursion.javastar
   (:require
-   [alandipert.interpol8 :refer [interpolating]])
+   [alandipert.interpol8 :refer [interpolating]]
+   [clojure.core.cache :as cache])
   (:import
    [javax.tools JavaCompiler DiagnosticCollector SimpleJavaFileObject ToolProvider JavaFileObject$Kind]))
 
@@ -87,10 +88,9 @@
                          #{method-body}
                        }
                      }")]
-   (compile-java class-name class-body)
-   (symbol class-name)))
+   (compile-java class-name class-body)))
 
-(def prim-aliases
+(def prim-strings
   "Type aliases for use with the return-type and arg-types arguments
    of java*."
   '{void     "void"
@@ -111,18 +111,37 @@
     longs    "long []"
     shorts   "short []"})
 
-(defn resolve-class
-  "If sym is an imported class, returns a qualified symbol."
-  [sym]
-  (if-let [k (get (ns-imports *ns*) sym)] (.getName k)))
+(def prim-classes
+  "Map of primitive aliases to Classes."
+  '{boolean  Boolean/TYPE
+    byte     Byte/TYPE
+    char     Character/TYPE
+    float    Float/TYPE
+    int      Integer/TYPE
+    double   Double/TYPE
+    long     Long/TYPE
+    short    Short/TYPE
+    booleans (Class/forName "[Z")
+    bytes    (Class/forName "[B")
+    chars    (Class/forName "[C")
+    floats   (Class/forName "[F")
+    ints     (Class/forName "[I")
+    doubles  (Class/forName "[D")
+    longs    (Class/forName "[J")
+    shorts   (Class/forName "[S")})
 
-(defn unalias
-  "Attempts to resolve sym as a primitive alias or imported Java
-  class."
-  [sym]
-  (or (get prim-aliases sym)
-      (resolve-class sym)
-      sym))
+(def method-cache (atom (cache/lu-cache-factory {} :threshold 1024)))
+
+(defn maybegen-and-invoke
+  [imports return-type arg-strs arg-classes code args]
+  (let [k [imports return-type arg-classes code]]
+    (if-let [cached (get @method-cache k)]
+      (do (swap! method-cache cache/hit k)
+          (.invoke ^java.lang.reflect.Method cached nil (into-array Object args)))
+      (let [klass (generate-class imports return-type arg-strs code)
+            meth (.getMethod klass "m" (into-array Class arg-classes))]
+        (swap! method-cache cache/miss k meth)
+        (.invoke ^java.lang.reflect.Method meth nil (into-array Object args))))))
 
 (defmacro java*
   "Similar to ClojureScript's js*.  Compiles a Java code string into a
@@ -139,11 +158,13 @@
   (java-add 1 2) ;=> 3"
   [imports return-type arg-types code & args]
   {:pre [(= (count arg-types) (count args))]}
-  (let [g (generate-class
-           (map #(or (resolve-class %) %) imports)
-           (unalias return-type)
-           (map unalias arg-types) code)]
-    `(. ~g ~'m ~@args)))
+  `(maybegen-and-invoke
+    (mapv #(.getName %) ~imports)
+    ~(or (prim-strings return-type) `(.getName ~return-type))
+    ~(mapv #(or (prim-strings %) `(.getName ~%)) arg-types)
+    ~(mapv #(or (prim-classes %) %) arg-types)
+    ~code
+    [~@args]))
 
 (comment
 
