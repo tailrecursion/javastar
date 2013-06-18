@@ -188,7 +188,7 @@
                   ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
                   ~(mapv #(or (prim-classes %) %) arg-types)
                   ~code)]
-       (.invoke meth# nil (into-array Object [~@args])))
+       (.invoke meth# nil (object-array [~@args])))
     (let [klass (generate-class
                  (mapv resolve-class imports)
                  (or (prim-strings return-type) (resolve-class return-type))
