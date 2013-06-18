@@ -35,8 +35,9 @@ Write Java inside Clojure:
        "cow") ;=> "holy cow!"
 ```
 
-Requires Java 1.6 JDK or higher.  Probably not compatible with
-[http://clojure.org/compilation](ahead-of-time (AOT) compilation).
+Requires Java 1.6 JDK or higher.  Probably not compatible with <a
+href="http://clojure.org/compilation">ahead-of-time (AOT)
+compilation</a>.
 
 ## Dependency [![Build Status](https://travis-ci.org/tailrecursion/javastar.png?branch=master)](https://travis-ci.org/tailrecursion/javastar)
 
