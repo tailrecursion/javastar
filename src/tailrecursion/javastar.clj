@@ -74,7 +74,7 @@
   [s pattern substitutions]
   (reduce #(.replaceFirst ^String %1 pattern %2) s substitutions))
 
-(defn generate-class
+(defn ^Class generate-class
   "Generates, compiles, and loads a class with a single method, m,
   containing the code string.  Defines m's signature using
   return-type, arg-types, and ~{} occurrences in source as with js*.
@@ -140,16 +140,14 @@
 
 (def method-cache (atom (cache/lu-cache-factory {} :threshold 1024)))
 
-(defn maybegen-and-invoke
-  [imports return-type arg-strs arg-classes code args]
+(defn ^java.lang.reflect.Method generate-method
+  [imports return-type arg-strs arg-classes code]
   (let [k [return-type arg-classes code]]
-    (if-let [cached (get @method-cache k)]
-      (do (swap! method-cache cache/hit k)
-          (.invoke ^java.lang.reflect.Method cached nil (into-array Object args)))
+    (if-let [meth (get @method-cache k)]
+      (do (swap! method-cache cache/hit k) meth)
       (let [klass (generate-class imports return-type arg-strs code)
-            meth (.getMethod ^Class klass "m" (into-array Class arg-classes))]
-        (swap! method-cache cache/miss k meth)
-        (.invoke ^java.lang.reflect.Method meth nil (into-array Object args))))))
+            meth (.getMethod klass "m" (into-array Class arg-classes))]
+        (do (swap! method-cache cache/miss k meth) meth)))))
 
 (defmacro java*
   "Similar to ClojureScript's js*.  Compiles a Java code string into a
@@ -166,13 +164,13 @@
   (java-add 1 2) ;=> 3"
   [imports return-type arg-types code & args]
   {:pre [(= (count arg-types) (count args))]}
-  `(maybegen-and-invoke
-    (mapv #(.getName ^Class %) ~imports)
-    ~(or (prim-strings return-type) `(.getName ^Class ~return-type))
-    ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
-    ~(mapv #(or (prim-classes %) %) arg-types)
-    ~code
-    [~@args]))
+  `(let [meth# (generate-method
+                (mapv #(.getName ^Class %) ~imports)
+                ~(or (prim-strings return-type) `(.getName ^Class ~return-type))
+                ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
+                ~(mapv #(or (prim-classes %) %) arg-types)
+                ~code)]
+     (.invoke meth# nil (into-array Object [~@args]))))
 
 (comment
 
