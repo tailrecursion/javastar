@@ -138,21 +138,21 @@
     longs    (Class/forName "[J")
     shorts   (Class/forName "[S")})
 
-(def method-cache
+(def aot-method-cache
   "Cache of method signatures to Methods.  Used when java* is AOT'd."
   (atom (cache/lu-cache-factory {} :threshold 1024)))
 
-(defn ^java.lang.reflect.Method generate-method
+(defn ^java.lang.reflect.Method aot-generate-method
   "Generates a method satisfying arguments, returning a matching
   method if one has already been generated.  Used only when java* is
   AOT compiled."
   [imports return-type arg-strs arg-classes code]
   (let [k [return-type arg-classes code]]
-    (if-let [meth (get @method-cache k)]
-      (do (swap! method-cache cache/hit k) meth)
+    (if-let [meth (get @aot-method-cache k)]
+      (do (swap! aot-method-cache cache/hit k) meth)
       (let [klass (generate-class imports return-type arg-strs code)
             meth (.getMethod klass "m" (into-array Class arg-classes))]
-        (do (swap! method-cache cache/miss k meth) meth)))))
+        (do (swap! aot-method-cache cache/miss k meth) meth)))))
 
 (defn resolve-class
   "Attempts to resolve sym as an import alias in the current
@@ -161,6 +161,25 @@
   (if-let [k (get (ns-imports *ns*) sym)]
     (.getName ^Class k)
     (str sym)))
+
+(defn- java*-aot
+  [imports return-type arg-types code args]
+  `(let [meth# (aot-generate-method
+                (mapv #(.getName ^Class %) ~imports)
+                ~(or (prim-strings return-type) `(.getName ^Class ~return-type))
+                ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
+                ~(mapv #(or (prim-classes %) %) arg-types)
+                ~code)]
+     (.invoke meth# nil (object-array [~@args]))))
+
+(defn- java*-dynamic
+  [imports return-type arg-types code args]
+  (let [klass (generate-class
+               (mapv resolve-class imports)
+               (or (prim-strings return-type) (resolve-class return-type))
+               (mapv #(or (prim-strings %) (resolve-class %)) arg-types)
+               code)]
+    `(. ~(symbol (.getName klass)) ~'m ~@args)))
 
 (defmacro java*
   "Similar to ClojureScript's js*.  Compiles a Java code string into a
@@ -182,19 +201,8 @@
   [imports return-type arg-types code & args]
   {:pre [(= (count arg-types) (count args))]}
   (if clojure.core/*compile-files*
-    `(let [meth# (generate-method
-                  (mapv #(.getName ^Class %) ~imports)
-                  ~(or (prim-strings return-type) `(.getName ^Class ~return-type))
-                  ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
-                  ~(mapv #(or (prim-classes %) %) arg-types)
-                  ~code)]
-       (.invoke meth# nil (object-array [~@args])))
-    (let [klass (generate-class
-                 (mapv resolve-class imports)
-                 (or (prim-strings return-type) (resolve-class return-type))
-                 (mapv #(or (prim-strings %) (resolve-class %)) arg-types)
-                 code)]
-      `(. ~(symbol (.getName klass)) ~'m ~@args))))
+    (java*-aot imports return-type arg-types code args)
+    (java*-dynamic imports return-type arg-types code args)))
 
 (comment
 
