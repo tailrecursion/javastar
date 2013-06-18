@@ -18,7 +18,7 @@
 
 (deftest n-args
   (let [greet #(java* [] java.lang.String [String String] "return ~{} +\", \" + ~{} + \"!\"; " %1 %2)]
-    (= "hi, Bob!" (greet "hi" "Bob")))
+    (is (= "hi, Bob!" (greet "hi" "Bob"))))
 
   (is (= "holy cow!" (java* [Var clojure.lang.RT]
                             Object [String String]
