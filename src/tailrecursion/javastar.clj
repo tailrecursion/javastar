@@ -151,10 +151,11 @@
 
   (defn sum1 [a] (reduce + a))
 
-  (dotimes [_ 3] (time (sum1 arr)))
-  ;; "Elapsed time: 147.512201 msecs"
-  ;; "Elapsed time: 143.983773 msecs"
-  ;; "Elapsed time: 144.517018 msecs"
+  (dotimes [_ 1000] (time (sum1 arr)))
+  ;; (warming up)...
+  ;; "Elapsed time: 27.516602 msecs"
+  ;; "Elapsed time: 27.67769 msecs"
+  ;; "Elapsed time: 30.451273 msecs"
 
   (defn sum2 [^doubles a]
     (let [len (long (alength a))]
@@ -165,10 +166,11 @@
             (recur (+ sum ai) (unchecked-inc idx)))
           sum))))
 
-  (dotimes [_ 3] (time (sum2 arr)))
-  ;; "Elapsed time: 48.073676 msecs"
-  ;; "Elapsed time: 42.163496 msecs"
-  ;; "Elapsed time: 42.356943 msecs"
+  (dotimes [_ 1000] (time (sum2 arr)))
+  ;; (warming up)...
+  ;; "Elapsed time: 4.222948 msecs"
+  ;; "Elapsed time: 4.23123 msecs"
+  ;; "Elapsed time: 4.615039 msecs"
 
   (defn sum3 [a]
     (java* [] double [doubles]
@@ -179,9 +181,10 @@
             }
             return s;" a))
 
-  (dotimes [_ 3] (time (sum3 arr)))
-  ;; "Elapsed time: 1.672226 msecs"
-  ;; "Elapsed time: 1.117232 msecs"
-  ;; "Elapsed time: 1.312508 msecs"
+  (dotimes [_ 1000] (time (sum3 arr)))
+  ;; (warming up)...
+  ;; "Elapsed time: 1.104737 msecs"
+  ;; "Elapsed time: 1.097818 msecs"
+  ;; "Elapsed time: 1.102997 msecs"
 
   )
