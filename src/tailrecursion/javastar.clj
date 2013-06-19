@@ -50,11 +50,10 @@
   returning the loaded Class."
   [class-name source]
   (let [compiler (ToolProvider/getSystemJavaCompiler)
-        diag (DiagnosticCollector.)
-        mgr (class-manager (.getStandardFileManager compiler nil nil nil))
-        task (.getTask compiler nil mgr diag nil nil [(source-object class-name source)])]
+        diag     (DiagnosticCollector.)
+        mgr      (class-manager (.getStandardFileManager compiler nil nil nil))
+        task     (.getTask compiler nil mgr diag nil nil [(source-object class-name source)])]
     (if (.call task)
-
       (.loadClass (.getClassLoader ^StandardJavaFileManager mgr nil) class-name)
       (throw (RuntimeException.
               (str "java* compilation error: " (first (.getDiagnostics diag)) "\n"
@@ -82,23 +81,23 @@
 
   Returns the loaded class's name as a symbol."
   [imports return-type arg-types code]
-  (let [class-name (str (gensym "generated_class"))
-        n (occurrences code "~{}")
-        arg-names (mapv str (repeatedly n gensym))
-        arguments (->> (map #(str %1 " " %2) arg-types arg-names)
-                       (interpose \,)
-                       (apply str))
+  (let [class-name  (str (gensym "generated_class"))
+        n           (occurrences code "~{}")
+        arg-names   (mapv str (repeatedly n gensym))
+        arguments   (->> (map #(str %1 " " %2) arg-types arg-names)
+                         (interpose \,)
+                         (apply str))
         method-body (substitute code "~\\{\\}" arg-names)
-        prelude (apply str (map #(format "import %s;\n" %) imports))
-        class-body (interpolating
-                    "package tailrecursion.java_STAR_;
-                     #{prelude}
-                     public class #{class-name} {
-                       public static #{return-type} m (#{arguments}) {
-                         #{method-body}
-                       }
-                     }")]
-   (compile-java (str "tailrecursion.java_STAR_." class-name) class-body)))
+        prelude     (apply str (map #(format "import %s;\n" %) imports))
+        class-body  (interpolating
+                     "package tailrecursion.java_STAR_;
+                      #{prelude}
+                      public class #{class-name} {
+                        public static #{return-type} m (#{arguments}) {
+                          #{method-body}
+                        }
+                      }")]
+    (compile-java (str "tailrecursion.java_STAR_." class-name) class-body)))
 
 (def prims-classes
   "Map of primitive aliases to Classes."
@@ -160,7 +159,7 @@
    (Class/forName "[S") "short[]"})
 
 (def method-cache
-  "Cache of method signatures to Methods.  Used when java* is AOT'd."
+  "Cache of method signatures + code to Methods."
   (atom (cache/lu-cache-factory {} :threshold 1024)))
 
 (defn ^java.lang.reflect.Method generate-method
@@ -171,12 +170,10 @@
     (if-let [meth (get @method-cache k)]
       (do (swap! method-cache cache/hit k) meth)
       (let [imports-str (mapv #(.getName ^Class %) imports)
-            return-str (or (classes-strs return-class)
-                           (.getName ^Class return-class))
-            arg-strs (mapv #(or (classes-strs %)
-                                (.getName ^Class %)) arg-classes)
-            klass (generate-class imports-str return-str arg-strs code)
-            meth (.getMethod klass "m" (into-array Class arg-classes))]
+            return-str  (or (classes-strs return-class) (.getName ^Class return-class))
+            arg-strs    (mapv #(or (classes-strs %) (.getName ^Class %)) arg-classes)
+            klass       (generate-class imports-str return-str arg-strs code)
+            meth        (.getMethod klass "m" (into-array Class arg-classes))]
         (do (swap! method-cache cache/miss k meth) meth)))))
 
 (defmacro java*
