@@ -54,6 +54,7 @@
         mgr (class-manager (.getStandardFileManager compiler nil nil nil))
         task (.getTask compiler nil mgr diag nil nil [(source-object class-name source)])]
     (if (.call task)
+
       (.loadClass (.getClassLoader ^StandardJavaFileManager mgr nil) class-name)
       (throw (RuntimeException.
               (str "java* compilation error: " (first (.getDiagnostics diag)) "\n"
@@ -81,45 +82,25 @@
 
   Returns the loaded class's name as a symbol."
   [imports return-type arg-types code]
-  (let [class-name (str (gensym "tailrecursion_java_STAR_class"))
+  (let [class-name (str (gensym "generated_class"))
         n (occurrences code "~{}")
         arg-names (mapv str (repeatedly n gensym))
         arguments (->> (map #(str %1 " " %2) arg-types arg-names)
                        (interpose \,)
                        (apply str))
         method-body (substitute code "~\\{\\}" arg-names)
-        prelude (apply str (map #(format "import %s;" (name %)) imports))
+        prelude (apply str (map #(format "import %s;\n" %) imports))
         class-body (interpolating
-                    "#{prelude}
+                    "package tailrecursion.java_STAR_;
+                     #{prelude}
                      public class #{class-name} {
                        public static #{return-type} m (#{arguments}) {
                          #{method-body}
                        }
                      }")]
-   (compile-java class-name class-body)))
+   (compile-java (str "tailrecursion.java_STAR_." class-name) class-body)))
 
-(def prim-strings
-  "Type aliases for use with the return-type and arg-types arguments
-   of java*."
-  '{void     "void"
-    boolean  "boolean"
-    byte     "byte"
-    char     "char"
-    float    "float"
-    int      "int"
-    double   "double"
-    long     "long"
-    short    "short"
-    booleans "boolean []"
-    bytes    "byte []"
-    chars    "char []"
-    floats   "float []"
-    ints     "int []"
-    doubles  "double []"
-    longs    "long []"
-    shorts   "short []"})
-
-(def prim-classes
+(def prims-classes
   "Map of primitive aliases to Classes."
   '{boolean  Boolean/TYPE
     byte     Byte/TYPE
@@ -138,112 +119,84 @@
     longs    (Class/forName "[J")
     shorts   (Class/forName "[S")})
 
-(def aot-method-cache
+(def prims-strings
+  "Type aliases for use with the return-type and arg-types arguments
+   of java*."
+  '{void          "void"
+    boolean       "boolean"
+    byte          "byte"
+    char          "char"
+    float         "float"
+    int           "int"
+    double        "double"
+    long          "long"
+    short         "short"
+    booleans      "boolean[]"
+    bytes         "byte[]"
+    chars         "char[]"
+    floats        "float[]"
+    ints          "int[]"
+    doubles       "double[]"
+    longs         "long[]"
+    shorts        "short[]"})
+
+(def classes-strs
+  "Map of primitive classes to type strings."
+  {Boolean/TYPE         "boolean"
+   Byte/TYPE            "byte"
+   Character/TYPE       "char"
+   Float/TYPE           "float"
+   Integer/TYPE         "int"
+   Double/TYPE          "double"
+   Long/TYPE            "long"
+   Short/TYPE           "short"
+   (Class/forName "[Z") "boolean[]"
+   (Class/forName "[B") "byte[]"
+   (Class/forName "[C") "char[]"
+   (Class/forName "[F") "float[]"
+   (Class/forName "[I") "int[]"
+   (Class/forName "[D") "double[]"
+   (Class/forName "[J") "long[]"
+   (Class/forName "[S") "short[]"})
+
+(def method-cache
   "Cache of method signatures to Methods.  Used when java* is AOT'd."
   (atom (cache/lu-cache-factory {} :threshold 1024)))
 
-(defn ^java.lang.reflect.Method aot-generate-method
+(defn ^java.lang.reflect.Method generate-method
   "Generates a method satisfying arguments, returning a matching
-  method if one has already been generated.  Used only when java* is
-  AOT compiled."
-  [imports return-type arg-strs arg-classes code]
-  (let [k [return-type arg-classes code]]
-    (if-let [meth (get @aot-method-cache k)]
-      (do (swap! aot-method-cache cache/hit k) meth)
-      (let [klass (generate-class imports return-type arg-strs code)
+  method if one has already been generated."
+  [imports return-class arg-classes code]
+  (let [k [return-class arg-classes code]]
+    (if-let [meth (get @method-cache k)]
+      (do (swap! method-cache cache/hit k) meth)
+      (let [imports-str (mapv #(.getName ^Class %) imports)
+            return-str (or (classes-strs return-class)
+                           (.getName ^Class return-class))
+            arg-strs (mapv #(or (classes-strs %)
+                                (.getName ^Class %)) arg-classes)
+            klass (generate-class imports-str return-str arg-strs code)
             meth (.getMethod klass "m" (into-array Class arg-classes))]
-        (do (swap! aot-method-cache cache/miss k meth) meth)))))
-
-(defn resolve-class
-  "Attempts to resolve sym as an import alias in the current
-  namespace, returning its name."
-  [sym]
-  (if-let [k (get (ns-imports *ns*) sym)]
-    (.getName ^Class k)
-    (str sym)))
-
-(defn- java*-aot
-  [imports return-type arg-types code args]
-  `(let [meth# (aot-generate-method
-                (mapv #(.getName ^Class %) ~imports)
-                ~(or (prim-strings return-type) `(.getName ^Class ~return-type))
-                ~(mapv #(or (prim-strings %) `(.getName ^Class ~%)) arg-types)
-                ~(mapv #(or (prim-classes %) %) arg-types)
-                ~code)]
-     (.invoke meth# nil (object-array [~@args]))))
-
-(defn- java*-dynamic
-  [imports return-type arg-types code args]
-  (let [klass (generate-class
-               (mapv resolve-class imports)
-               (or (prim-strings return-type) (resolve-class return-type))
-               (mapv #(or (prim-strings %) (resolve-class %)) arg-types)
-               code)]
-    `(. ~(symbol (.getName klass)) ~'m ~@args)))
+        (do (swap! method-cache cache/miss k meth) meth)))))
 
 (defmacro java*
   "Similar to ClojureScript's js*.  Compiles a Java code string into a
   Java method and invokes the method with args.
 
   java* has more arguments than js*.  imports is a vector of
-  zero or more fully qualified class names.  return-type and arg-types
+  zero or more class names.  return-type and arg-types
   may be either Java classes or symbol aliases for primitive types and
-  arrays.  See prim-aliases for available aliases.
+  arrays.  See prims-classes keys for available aliases.
 
   Example:
 
   (def java-add #(java* [] long [long long] \"return ~{} + ~{};\" %1 %2))
-  (java-add 1 2) ;=> 3
-
-  Note: the implementation of java* is different when the namespace
-  it's being used in is AOT compiled.  The AOT version of java* is
-  slightly slower."
+  (java-add 1 2) ;=> 3"
   [imports return-type arg-types code & args]
   {:pre [(= (count arg-types) (count args))]}
-  (if clojure.core/*compile-files*
-    (java*-aot imports return-type arg-types code args)
-    (java*-dynamic imports return-type arg-types code args)))
-
-(comment
-
-  (def arr (double-array 1000000 1.0))
-
-  (defn sum1 [a] (reduce + a))
-
-  (dotimes [_ 1000] (time (sum1 arr)))
-  ;; (warming up)...
-  ;; "Elapsed time: 27.516602 msecs"
-  ;; "Elapsed time: 27.67769 msecs"
-  ;; "Elapsed time: 30.451273 msecs"
-
-  (defn sum2 [^doubles a]
-    (let [len (long (alength a))]
-      (loop [sum 0.0
-             idx 0]
-        (if (< idx len)
-          (let [ai (aget a idx)]
-            (recur (+ sum ai) (unchecked-inc idx)))
-          sum))))
-
-  (dotimes [_ 1000] (time (sum2 arr)))
-  ;; (warming up)...
-  ;; "Elapsed time: 4.222948 msecs"
-  ;; "Elapsed time: 4.23123 msecs"
-  ;; "Elapsed time: 4.615039 msecs"
-
-  (defn sum3 [a]
-    (java* [] double [doubles]
-           "double s = 0;
-            double[] arr = ~{};
-            for(int i = 0; i < arr.length; i++) {
-              s += arr[i];
-            }
-            return s;" a))
-
-  (dotimes [_ 1000] (time (sum3 arr)))
-  ;; (warming up)...
-  ;; "Elapsed time: 1.104737 msecs"
-  ;; "Elapsed time: 1.097818 msecs"
-  ;; "Elapsed time: 1.102997 msecs"
-
-  )
+  `(let [meth# (generate-method
+                ~imports
+                ~(or (prims-classes return-type) return-type)
+                ~(mapv #(or (prims-classes %) %) arg-types)
+                ~code)]
+     (.invoke meth# nil (object-array [~@args]))))

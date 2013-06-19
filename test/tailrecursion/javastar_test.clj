@@ -1,3 +1,5 @@
+(set! *warn-on-reflection* true)
+
 (ns tailrecursion.javastar-test
   (:require [clojure.test :refer :all]
             [tailrecursion.javastar :refer :all])
